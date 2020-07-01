@@ -3,19 +3,22 @@ import os
 import random
 import jacktrip_pypatcher as p
 import lounge_music
+import panning_plugin
 import subprocess
 import time
 import psutil
 
-dry_run = False
 jackClient = jack.Client('MadwortAutoPatcher')
 
+dry_run = True
 # number_of_voices = random.randint(1,5)
-number_of_voices = 5
+# number_of_voices = 5
 
 hold_music_port = 'lounge-music'
 
 all_jacktrip_receive_ports = jackClient.get_ports('.*receive.*')
+# TODO: use prefix so we don't have to treat L/R separately here
+# TODO: put prefix in `panning_plugin.py`!
 all_left_ladspa_ports = jackClient.get_ports('left-.*')
 all_right_ladspa_ports = jackClient.get_ports('right-.*')
 darkice_prefix = 'darkice'
@@ -53,7 +56,7 @@ if dry_run:
   jacktrip_clients = ['..ffff.192.168.0.1', '..ffff.192.168.0.2',
                       '..ffff.192.168.0.3', '..ffff.192.168.0.4',
                       '..ffff.192.168.0.5', '..ffff.192.168.0.6']
-  jacktrip_clients = jacktrip_clients[0:4]
+  jacktrip_clients = jacktrip_clients[0:6]
 
 # hard-coded list of client ips that send stereo input
 jacktrip_stereo = []
@@ -69,8 +72,34 @@ print('clients (stereo)', jacktrip_clients_stereo)
 
 print("=== Verify/start supporting software (ladspa, mpg123, darkice) ===")
 lounge_music.start_the_music(jackClient, hold_music_port)
+
+# find & kill already running ladspa plugins
+# TODO: DO NOT KILL IF THEY ARE ALREADY THE CORRECT ONES! THIS WILL BE BAD FOR CLIENTS!
+for proc in psutil.process_iter():
+  if 'jackspa-cli' in proc.name():
+    print("Killing",proc.pid)
+    proc.terminate()
+time.sleep(0.1)
+all_left_ladspa_ports = jackClient.get_ports('left-.*')
+print(len(all_left_ladspa_ports))
+# os._exit(1)
+
+if len(jacktrip_clients) == 4 or len(jacktrip_clients) == 5:
+  print(len(all_left_ladspa_ports))
   print("Start LADSPA plugins please!")
-  os._exit(1)
+  left50 = panning_plugin.start(0.5, True)
+  right50 = panning_plugin.start(0.5, False)
+  all_left_ladspa_ports = jackClient.get_ports('left-.*')
+  print(len(all_left_ladspa_ports))
+
+if len(jacktrip_clients) == 6:
+  print("Start LADSPA plugins please!")
+  left30 = panning_plugin.start(0.3, True)
+  right30 = panning_plugin.start(0.3, False)
+  left65 = panning_plugin.start(0.65, True)
+  right65 = panning_plugin.start(0.65, False)
+  all_left_ladspa_ports = jackClient.get_ports('left-.*')
+  print(len(all_left_ladspa_ports))
 
 darkice_ports = list(map(lambda x: x.name.split(':')[0],
                             jackClient.get_ports(darkice_prefix + '.*:left')))
